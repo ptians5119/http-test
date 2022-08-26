@@ -1,0 +1,140 @@
+{
+  "PHP": {
+    "enable": 1,
+    "base": {
+      "url": "http://10.5.4.183:80",
+      "times": 2,
+      "duration": 500
+    },
+    "buff": {
+      "enable": 1,
+      "reqs": [
+        {
+          "name": "获取服务台信息",
+          "api": "/api/guild/getGuild",
+          "headers": {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          "method": "post",
+          "body": {
+            "guild_id": "12343242342",
+            "user_id": "324827878978"
+          },
+          "stores": []
+        },
+        {
+          "name": "获取服务台用户列表",
+          "api": "/api/guild/getMember",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "method": "post",
+          "body": {
+            "guild_id": "12343242342",
+            "last_id": "324827878978"
+          },
+          "stores": []
+        },
+        {
+          "name": "表情符号列表",
+          "api": "/api/emojis/lists",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "method": "post",
+          "body": {
+            "guild_id": "12343242342"
+          },
+          "stores": []
+        },
+        {
+          "name": "获取dm列表",
+          "api": "/api/dm/dmList",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "method": "post",
+          "body": {
+            "user_id": "254365465",
+            "last_time": 1660452306
+          },
+          "stores": []
+        },
+        {
+          "name": "根据user_id查看实名认证结果",
+          "api": "/api/ID/CheckByUid",
+          "headers": {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          "method": "post",
+          "body": {
+            "user_id": "254365465"
+          },
+          "stores": []
+        },
+        {
+          "name": "圈子详情",
+          "api": "/api/circlePost/detail",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "method": "post",
+          "body": {
+            "post_id": "254365465",
+            "type": "card"
+          },
+          "stores": []
+        },
+        {
+          "name": "获取消息列表",
+          "api": "/api/message/getList",
+          "headers": {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          "method": "post",
+          "body": {
+            "channel_id": "254365465",
+            "size": 10,
+            "message_id": "32443565457",
+            "behavior": "before"
+          },
+          "stores": []
+        }
+      ]
+    },
+    "portal": {
+      "enable": 1,
+      "reqs": [
+        {
+          "name": "获取用户信息",
+          "api": "/api/user/getUser",
+          "headers": {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": "32847324jsdfhsdkf8934739829"
+          },
+          "method": "post",
+          "body": {
+            "user_ids": "254365465,3254356475676",
+            "guild_id": "324565457"
+          },
+          "stores": []
+        },
+        {
+          "name": "我的服务台列表",
+          "api": "/api/guild/myGuild2",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "method": "post",
+          "body": {
+            "user_id": "324565457"
+          },
+          "stores": []
+        }
+      ]
+    }
+  },
+  "RUST": {
+    "enable": 0
+  }
+}
