@@ -1,0 +1,16 @@
+*.exe
+*.test
+*.prof
+.godeps
+.cache
+.glide/
+.idea
+.idea/
+tmp/
+tmp
+*.log
+*.tpl.php
+.DS_Store
+target/
+.build_output
+Cargo.lock

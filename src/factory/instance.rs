@@ -1,21 +1,27 @@
-use std::{fs, io::{Result, Read, ErrorKind, Error}};
-use crate::client::RequestMethod as Method;
+use std::{fs, io::{Result, Read, ErrorKind, Error}, time};
+use crate::client::{RequestMethod as Method, MyClient};
 use serde_json;
 use serde_json::Value;
+use chrono;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
-struct Instance {
+#[derive(Debug)]
+pub struct Instance {
     name: String,
     url: String,
     times: usize,
     duration: u64,
+    timeout: u64,
     modules: Vec<Module>
 }
 
+#[derive(Debug)]
 struct Module {
     name: String,
     reqs: Vec<Request>
 }
 
+#[derive(Debug)]
 struct Request {
     name: String,
     api: String,
@@ -37,6 +43,43 @@ impl Instance {
         }
     }
 
+    pub(crate) async fn fire(self, client: &mut MyClient) -> Result<()>
+    {
+        let t0 = time::Instant::now();
+        println!(">>>>>>>>> Test for module: {}, begin at {}",
+                 &self.name,
+                 chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        );
+        let mut mod_inx = 1;
+        for module in self.modules {
+            println!("{}.{} :", mod_inx, &module.name);
+            mod_inx += 1;
+            let mut req_inx = 1;
+            for req in module.reqs {
+                let url = self.url.clone() + &req.api;
+                println!("{}). {}", req_inx, &url);
+                // 处理headers
+                let mut map = HeaderMap::new();
+                for (k, v) in req.headers {
+                    header(&mut map, k.clone(), v.clone());
+                }
+                let timeout = time::Duration::from_millis(self.timeout);
+                let res = client.handle(url.as_str(),
+                              req.method,
+                              req.body.to_owned(),
+                              map,
+                              timeout).await;
+                match res {
+                    Ok(msg) => println!("Ok,elapsed:{}ms ==> {}", msg.1, &msg.0),
+                    Err(e) => println!("Error,elapsed:{}ms ==> {}", e.1, e.0.to_string())
+                }
+                req_inx += 1;
+            }
+        }
+        println!("<<<<<<<<< End, total elapsed {}ms", t0.elapsed().as_millis());
+        Ok(())
+    }
+
     fn read_file() -> Result<String>
     {
         let mut file = fs::File::open("request.json")?;
@@ -45,51 +88,57 @@ impl Instance {
         Ok(content)
     }
 
-    /// 默认执行次数为1，循环间隔为0
-    pub(crate) fn new() -> Self
+    /// 默认执行次数为1，循环间隔为0, 请求超时时间100ms
+    fn new() -> Self
     {
         Self {
             name: "".to_string(),
             url: "".to_string(),
             times: 1,
             duration: 0,
+            timeout: 100,
             modules: vec![]
         }
     }
 
-    pub(crate) fn name(mut self, val: String) -> Instance
+    fn name(mut self, val: String) -> Instance
     {
         self.name = val; self
     }
 
-    pub(crate) fn url(mut self, val: String) -> Instance
+    fn url(mut self, val: String) -> Instance
     {
         self.url = val; self
     }
 
-    pub(crate) fn times(mut self, val: usize) -> Instance
+    fn times(mut self, val: usize) -> Instance
     {
         self.times = val; self
     }
 
-    pub(crate) fn duration(mut self, val: u64) -> Instance
+    fn duration(mut self, val: u64) -> Instance
     {
         self.duration = val; self
     }
 
-    pub(crate) fn modules(mut self, val: Vec<Module>) -> Instance
+    fn timeout(mut self, val: u64) -> Instance
+    {
+        self.timeout = val; self
+    }
+
+    fn modules(mut self, val: Vec<Module>) -> Instance
     {
         self.modules = val; self
     }
 
-    pub(crate) fn ok(self) -> bool
+    fn ok(&self) -> bool
     {
         self.name.len()!=0 && self.url.len()!=0 && !self.modules.is_empty()
     }
 }
 
 impl Module {
-    pub(crate) fn new() -> Self
+    fn new() -> Self
     {
         Self {
             name: "".to_string(),
@@ -97,24 +146,24 @@ impl Module {
         }
     }
 
-    pub(crate) fn name(mut self, val: String) -> Module
+    fn name(mut self, val: String) -> Module
     {
         self.name = val; self
     }
 
-    pub(crate) fn reqs(mut self, val: Vec<Request>) -> Module
+    fn reqs(mut self, val: Vec<Request>) -> Module
     {
         self.reqs = val; self
     }
 
-    pub(crate) fn ok(self) -> bool
+    fn ok(&self) -> bool
     {
         self.name.len()!=0 && !self.reqs.is_empty()
     }
 }
 
 impl Request {
-    pub(crate) fn new() -> Self
+    fn new() -> Self
     {
         Self {
             name: "".to_string(),
@@ -126,17 +175,17 @@ impl Request {
         }
     }
 
-    pub(crate) fn name(mut self, val: String) -> Request
+    fn name(mut self, val: String) -> Request
     {
         self.name = val; self
     }
 
-    pub(crate) fn api(mut self, val: String) -> Request
+    fn api(mut self, val: String) -> Request
     {
         self.api = val; self
     }
 
-    pub(crate) fn headers(mut self, json: Value) -> Request
+    fn headers(mut self, json: Value) -> Request
     {
         let mut vec = vec![];
         if let Some(objects) = json.as_object() {
@@ -144,36 +193,25 @@ impl Request {
                 vec.push((obj.0.to_owned(), obj.1.to_string()))
             }
         }
-        self.headers = vec;
-        self
+        self.headers = vec; self
     }
 
-    pub(crate) fn method(mut self, val: String) -> Request
+    fn method(mut self, val: String) -> Request
     {
-        self.method = match val.as_str() {
-            "get" => Method::Get,
-            "post" => Method::Post,
-            "put" => Method::Put,
-            "patch" => Method::Patch,
-            "delete" => Method::Delete,
-            _ => Method::None
-        };
-        self
+        self.method = Method::to(val); self
     }
 
-    pub(crate) fn body(mut self, val: String) -> Request
+    fn body(mut self, val: String) -> Request
     {
-        self.body = val;
-        self
+        self.body = val; self
     }
 
-    pub(crate) fn stores(mut self, val: Vec<String>) -> Request
+    fn stores(mut self, val: Vec<String>) -> Request
     {
-        self.stores = val;
-        self
+        self.stores = val; self
     }
 
-    pub(crate) fn ok(self) -> bool
+    fn ok(&self) -> bool
     {
         self.name.len()!=0 && self.api.len()!=0 && self.method!=Method::None
     }
@@ -187,33 +225,48 @@ trait JsonUtils {
 
 impl JsonUtils for Value {
     fn get_instances(self) -> Result<Vec<Instance>> {
-        let mut instances = vec![];
+        // println!("{:?}", &self);
         if let Some(objects) = self.as_object() {
+            let mut instances = vec![];
             for obj in objects {
                 if let Some(sub_objects) = obj.1.as_object() {
-                    let mut instance = Instance::new();
+                    if sub_objects["enable"].as_u64() == Some(0) {
+                        continue
+                    }
+                    let mut tmp = (
+                        "".to_string(),
+                        "".to_string(),
+                        0, 0, 0
+                    );
                     let mut modules = Value::Null;
                     for sub_obj in sub_objects {
-                        match sub_obj.0.as_str()? {
+                        match sub_obj.0.as_str() {
                             "enable" => {
-                                if let Some(1) = sub_obj.1.as_u64() {
-                                    continue
-                                } else {
-                                    break
-                                }
+                                continue
                             }
                             "base" => {
-                                instance.name(obj.0.to_owned())
-                                    .url(sub_obj.1["url"].to_string())
-                                    .times(sub_obj.1["times"].as_u64()? as usize)
-                                    .duration(sub_obj.1["duration"].as_u64()?)
+                                tmp = (
+                                    obj.0.to_owned(),
+                                    sub_obj.1["url"].as_str().unwrap().to_string(),
+                                    sub_obj.1["times"].as_u64().unwrap() as usize,
+                                    sub_obj.1["duration"].as_u64().unwrap(),
+                                    sub_obj.1["timeout"].as_u64().unwrap()
+                                    );
                             }
                             _ => {
                                 modules[sub_obj.0] = sub_obj.1.to_owned();
                             }
                         }
                     }
-                    instance.modules(modules.get_modules()?);
+                    // let aa = modules.get_modules()?;
+                    // println!("{:?}", &aa);
+                    let instance = Instance::new()
+                        .name(tmp.0)
+                        .url(tmp.1)
+                        .times(tmp.2)
+                        .duration(tmp.3)
+                        .timeout(tmp.4)
+                        .modules(modules.get_modules()?);
                     if instance.ok() {
                         instances.push(instance);
                     }
@@ -221,7 +274,7 @@ impl JsonUtils for Value {
                     return Err(Error::new(ErrorKind::Other, "[ins]sub isn't a object!"))
                 }
             }
-            Ok(vec![])
+            Ok(instances)
         } else {
             Err(Error::new(ErrorKind::Other, "[ins]origin isn't a object!"))
         }
@@ -232,21 +285,13 @@ impl JsonUtils for Value {
             let mut modules = vec![];
             for obj in objects {
                 let module_name = obj.0.to_owned();
-                match obj.0.as_str() {
-                    "enable" => {
-                        if let Some(1) = sub_obj.1.as_u64() {
-                            continue
-                        } else {
-                            break
-                        }
+                if obj.1["enable"].eq(&1) {
+                    let module = Module::new()
+                        .name(module_name)
+                        .reqs(obj.1["reqs"].clone().get_request()?);
+                    if module.ok() {
+                        modules.push(module.into())
                     }
-                    "reqs" => {
-                        modules.push(Module::new()
-                            .name(module_name)
-                            .reqs(obj.1.get_request()?)
-                            .into())
-                    }
-                    _ => continue
                 }
             }
             Ok(modules)
@@ -260,10 +305,10 @@ impl JsonUtils for Value {
             let mut requests = vec![];
             for req in vec {
                 let request = Request::new()
-                    .name(req["name"].to_string())
-                    .api(req["api"].to_string())
+                    .name(req["name"].as_str().unwrap().to_string())
+                    .api(req["api"].as_str().unwrap().to_string())
                     .headers(req["headers"].clone())
-                    .method(req["method"].to_string())
+                    .method(req["method"].as_str().unwrap().to_string())
                     .body(req["body"].to_string())
                     .stores(vec![]);
                 if request.ok() {
@@ -275,4 +320,11 @@ impl JsonUtils for Value {
             Err(Error::new(ErrorKind::Other, "[req]origin isn't a array!"))
         }
     }
+}
+
+pub fn header(map: &mut HeaderMap, name: String, value: String)
+{
+    let name = HeaderName::from_bytes(name.as_bytes()).unwrap();
+    let value = HeaderValue::from_bytes(value.as_bytes()).unwrap();
+    map.insert(name, value);
 }

@@ -2,20 +2,34 @@ use std::time::Duration;
 use std::io::{Error, ErrorKind};
 use reqwest::{Client, header};
 
+#[derive(PartialEq, Debug)]
 pub enum RequestMethod {
     Get, Post, Put, Patch, Delete, None
 }
 
+impl RequestMethod {
+    pub(crate) fn to(str: String) -> Self
+    {
+        match str.as_str()
+        {
+            "get" => Self::Get,
+            "post" => Self::Post,
+            "put" => Self::Put,
+            "patch" => Self::Patch,
+            "delete" => Self::Delete,
+            _ => Self::None
+        }
+    }
+}
+
 pub struct MyClient {
-    url: String,
     client: Client,
 }
 
 impl MyClient {
-    pub fn new(url: String) -> Self
+    pub fn new() -> Self
     {
         MyClient {
-            url,
             client: Client::new()
         }
     }
@@ -27,15 +41,13 @@ impl MyClient {
                         timeout: Duration) -> Result<(String, u128), (Error, u128)>
     {
         let t0 = std::time::Instant::now();
-        let url = self.url.clone() + url;
-        println!("url: {}", &url);
         let req = match method {
             RequestMethod::Get => self.client.get(url),
             RequestMethod::Post => self.client.post(url),
             RequestMethod::Put => self.client.put(url),
             RequestMethod::Patch => self.client.patch(url),
             RequestMethod::Delete => self.client.delete(url),
-            _ => Err((Error::new(ErrorKind::Other, "method is none"), 0))
+            _ => return Err((Error::new(ErrorKind::Other, "method is none"), 0))
         };
         match req.timeout(timeout)
             .headers(headers)
