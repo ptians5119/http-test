@@ -14,13 +14,15 @@ use request::*;
 pub struct Doings {
     handler: Option<Vec<Instance>>,
     client: Arc<Mutex<MyClient>>,
+    th_no: i32
 }
 
 impl Doings {
-    pub(crate) fn new(client: Arc<Mutex<MyClient>>) -> Self {
+    pub(crate) fn new(client: Arc<Mutex<MyClient>>, no: i32) -> Self {
         Doings {
             handler: None,
-            client
+            client,
+            th_no: no
         }
     }
 
@@ -40,7 +42,7 @@ impl Doings {
             for handle in handlers {
                 let client = self.client.clone();
                 let mut c = client.lock().await;
-                let _ = handle.fire(&mut c).await?;
+                let _ = handle.fire(&mut c, self.th_no).await?;
             }
         }
         Ok(())

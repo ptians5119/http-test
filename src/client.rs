@@ -35,18 +35,18 @@ impl MyClient {
     }
 
     pub async fn handle(&mut self, url: &str,
-                        method: RequestMethod,
+                        method: &RequestMethod,
                         content: String,
                         headers: header::HeaderMap,
                         timeout: Duration) -> Result<(String, u128), (Error, u128)>
     {
         let t0 = std::time::Instant::now();
         let req = match method {
-            RequestMethod::Get => self.client.get(url),
-            RequestMethod::Post => self.client.post(url),
-            RequestMethod::Put => self.client.put(url),
-            RequestMethod::Patch => self.client.patch(url),
-            RequestMethod::Delete => self.client.delete(url),
+            &RequestMethod::Get => self.client.get(url),
+            &RequestMethod::Post => self.client.post(url),
+            &RequestMethod::Put => self.client.put(url),
+            &RequestMethod::Patch => self.client.patch(url),
+            &RequestMethod::Delete => self.client.delete(url),
             _ => return Err((Error::new(ErrorKind::Other, "method is none"), 0))
         };
         match req.timeout(timeout)

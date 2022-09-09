@@ -26,38 +26,55 @@ impl Instance {
         }
     }
 
-    pub(crate) async fn fire(self, client: &mut MyClient) -> Result<()>
+    pub(crate) async fn fire(self, client: &mut MyClient, th: i32) -> Result<()>
     {
+        let mut times = 0;
         let t0 = time::Instant::now();
-        println!(">>>>>>>>> Test for module: {}, begin at {}",
-                 &self.name,
-                 chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
-        );
-        let mut mod_inx = 1;
-        for module in self.modules {
-            println!("{}.{} :", mod_inx, &module.name);
-            mod_inx += 1;
-            let mut req_inx = 1;
-            for req in module.reqs {
-                let url = self.url.clone() + &req.api;
-                println!("{}). {}\n [headers] ==> {}\n [body] ==> {}", req_inx, &url, Instance::header_output(&req.headers), &req.body);
-                // 处理headers
-                let mut map = HeaderMap::new();
-                for (k, v) in req.headers {
-                    header(&mut map, k.clone(), v.clone());
-                }
-                let timeout = time::Duration::from_millis(self.timeout);
-                let res = client.handle(url.as_str(),
-                              req.method,
-                              req.body.to_owned(),
-                              map,
-                              timeout).await;
-                match res {
-                    Ok(msg) => println!(" [send] ==> ok \n [elapsed] ==> {}ms\n [msg] ==> {}", msg.1, &msg.0),
-                    Err(e) => println!(" [send] ==> err \n [elapsed] ==> {}ms\n [msg] ==> {}", e.1, e.0.to_string())
-                }
-                req_inx += 1;
+        let mut message = vec![];
+        message.push(format!(">>>>>>>>> Test for thread: {}, module: {}, begin at {}",
+                             th,
+                             &self.name,
+                             chrono::Local::now().format("%Y-%m-%d %H:%M:%S")));
+        let mut req_inx = 1;
+        loop {
+            let mut output = "".to_string();
+            if times > self.times {
+                break
+            } else {
+                times += 1;
             }
+            let mut mod_inx = 1;
+            for module in &self.modules {
+                let str = format!("{}.{} :\n", mod_inx, &module.name);
+                output += str.as_str();
+                mod_inx += 1;
+                for req in &module.reqs {
+                    let url = self.url.clone() + &req.api;
+                    let str = format!("{}). {}\n [headers] ==> {}\n [body] ==> {}\n", req_inx, &url, Instance::header_output(&req.headers), &req.body);
+                    output += str.as_str();
+                    // 处理headers
+                    let mut map = HeaderMap::new();
+                    for (k, v) in &req.headers {
+                        header(&mut map, k.clone(), v.clone());
+                    }
+                    let timeout = time::Duration::from_millis(self.timeout);
+                    let res = client.handle(url.as_str(),
+                                            &req.method,
+                                            req.body.to_owned(),
+                                            map,
+                                            timeout).await;
+                    let str = match res {
+                        Ok(msg) => format!(" [send] ==> ok \n [elapsed] ==> {}ms\n [msg] ==> {}", msg.1, &msg.0),
+                        Err(e) => format!(" [send] ==> err \n [elapsed] ==> {}ms\n [msg] ==> {}", e.1, e.0.to_string())
+                    };
+                    output += str.as_str();
+                    req_inx += 1;
+                }
+            }
+            message.push(output);
+        }
+        for m in message {
+            println!("{}", m);
         }
         println!("<<<<<<<<< End, total elapsed {}ms", t0.elapsed().as_millis());
         Ok(())
